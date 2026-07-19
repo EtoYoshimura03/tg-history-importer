@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tg-history-importer"
+version = "0.1.0"
+description = "Import Telegram chat exports (JSON) into PostgreSQL or SQLite."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "EtoYoshimura03" }]
+keywords = [
+    "telegram",
+    "export",
+    "import",
+    "sqlite",
+    "postgresql",
+    "chat",
+    "history",
+]
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Environment :: Console",
+    "Topic :: Database",
+    "Topic :: Communications :: Chat",
+]
+dependencies = [
+    "SQLAlchemy>=2.0,<3.0",
+    "typer>=0.9",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.1"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+tg-history-importer = "tg_history_importer.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/EtoYoshimura03/tg-history-importer"
+Repository = "https://github.com/EtoYoshimura03/tg-history-importer"
+Mirror = "https://codeberg.org/EtoOwl/tg-history-importer"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

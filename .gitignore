@@ -1,0 +1,40 @@
+# --- Dev diary (private, never published) ---
+DEV_DIARY.md
+
+# --- Secrets / local config ---
+.env
+*.env
+!.env.example
+
+# --- Local SQLite databases produced by the tool ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Local media store (v2 feature) ---
+media_store/
+
+# --- Telegram exports that a user might drop into the repo while testing ---
+ChatExport_*/
+result.json
+!tests/fixtures/*.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
