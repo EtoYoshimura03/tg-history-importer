@@ -1,0 +1,61 @@
+{
+  "name": "Test Chat",
+  "type": "public_supergroup",
+  "id": 2281106395,
+  "messages": [
+    {
+      "id": 1,
+      "type": "service",
+      "date": "2026-07-15T10:00:00",
+      "date_unixtime": "1784106000",
+      "actor": "Jhon Doe",
+      "actor_id": "user480642587",
+      "action": "create_group",
+      "title": "Test Chat",
+      "text": ""
+    },
+    {
+      "id": 2,
+      "type": "message",
+      "date": "2026-07-15T10:01:00",
+      "date_unixtime": "1784106060",
+      "from": "Jhon Doe",
+      "from_id": "user480642587",
+      "text": "Hello world",
+      "text_entities": [{ "type": "plain", "text": "Hello world" }]
+    },
+    {
+      "id": 3,
+      "type": "message",
+      "date": "2026-07-15T10:02:00",
+      "date_unixtime": "1784106120",
+      "from": "Maria",
+      "from_id": "user111222333",
+      "reply_to_message_id": 2,
+      "text": ["Hi ", { "type": "mention", "text": "@jhondoe" }],
+      "text_entities": [
+        { "type": "plain", "text": "Hi " },
+        { "type": "mention", "text": "@jhondoe" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "message",
+      "date": "2026-07-17T16:52:23",
+      "date_unixtime": "1784296343",
+      "from": "Jhon Doe",
+      "from_id": "user480642587",
+      "file": "video_files/1781.gif.mp4",
+      "file_name": "1781.gif.mp4",
+      "file_size": 16193,
+      "thumbnail": "video_files/1781.gif.mp4_thumb.jpg",
+      "media_type": "animation",
+      "mime_type": "video/mp4",
+      "duration_seconds": 1,
+      "width": 320,
+      "height": 180,
+      "text": "",
+      "text_entities": []
+    }
+  ]
+}
