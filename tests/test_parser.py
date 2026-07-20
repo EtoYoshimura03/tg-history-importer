@@ -22,10 +22,12 @@ def test_parse_counts():
     r = parse_export(FIXTURE)
     assert r.chat_id == 2281106395
     assert r.chat_name == "Test Chat"
+    assert r.chat_type == "public_supergroup"
     assert len(r.rows) == 4
     assert r.total_messages == 4
     assert r.service_rows == 1
     assert r.max_date_unixtime == 1784296343
+    assert all(row["chat_type"] == "public_supergroup" for row in r.rows)
 
 
 def test_service_row():

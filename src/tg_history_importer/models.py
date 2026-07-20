@@ -52,6 +52,8 @@ import_logs = Table(
     # Chat the export belongs to (normalized id, without the -100 prefix).
     Column("export_chat_id", BigInteger, nullable=True),
     Column("export_chat_name", String(1024), nullable=True),
+    # Export type: personal_chat (1:1 dialog), public_supergroup, channel, ...
+    Column("export_chat_type", String(32), nullable=True),
     Column("export_file_name", String(1024), nullable=True),
     Column("export_file_size", BigInteger, nullable=True),
     # Unixtime of the latest message in the export (how far history was pulled).
@@ -71,6 +73,10 @@ messages = Table(
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("chat_id", BigInteger, nullable=False),
     Column("chat_name", String(1024), nullable=True),
+    # Chat kind from the export: personal_chat (1:1 dialog), public_supergroup,
+    # private_group, channel, bot_chat, ... Filter dialogs with
+    # WHERE chat_type = 'personal_chat'.
+    Column("chat_type", String(32), nullable=True),
     Column("message_id", BigInteger, nullable=False),
     # "message" (regular) or "service" (join/leave/pin/call/...).
     Column("message_type", String(32), nullable=False),

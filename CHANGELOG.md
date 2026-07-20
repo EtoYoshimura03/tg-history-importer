@@ -9,6 +9,13 @@ Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 ### Added
 - `load` now reports batch count (`in N batch(es) of M`) and accepts
   `--verbose`/`-v` for per-batch insert progress.
+- Chat type captured from the export: `messages.chat_type` and
+  `import_logs.export_chat_type` (e.g. `personal_chat` for a 1:1 dialog vs
+  `public_supergroup`). Filter dialogs with `WHERE chat_type = 'personal_chat'`.
+
+### Docs
+- README: note that the `tg-history-importer` command needs an activated venv
+  or `uv run` prefix; checklist-style Roadmap.
 
 ## [0.1.0] - unreleased
 

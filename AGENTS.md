@@ -25,6 +25,15 @@ and `import_logs`.
 - `tests/` — pytest; `tests/fixtures/sample_result.json` is the canonical tiny
   export used by tests.
 
+## Running
+
+- Recommended dev flow is **uv**: `uv venv --python 3.12`,
+  `uv pip install -e ".[dev,postgres]"`, `uv run pytest`.
+- The `tg-history-importer` console command only exists on PATH inside an
+  activated venv or a global install. When giving the maintainer a command,
+  prefix it with `uv run` (e.g. `uv run tg-history-importer load ...`) unless
+  the venv is known to be activated.
+
 ## Rules
 
 - **One schema, all dialects.** Do not fork the schema per database. Add columns

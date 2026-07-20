@@ -105,6 +105,7 @@ def load_cmd(
         db_target=to,
         export_chat_id=parsed.chat_id,
         export_chat_name=parsed.chat_name,
+        export_chat_type=parsed.chat_type,
         export_file_name=file_path.name,
         export_file_size=file_size,
         export_max_date_unixtime=parsed.max_date_unixtime,

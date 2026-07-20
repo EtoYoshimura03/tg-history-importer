@@ -41,6 +41,13 @@ format **JSON (machine-readable)** → export. You get a folder like
 
 ## Usage
 
+> The examples use the bare `tg-history-importer` command, which is available
+> once the package is installed **on your PATH** — inside an activated
+> virtualenv, or via a global install (`pipx install .`). If you use **uv**
+> without activating the venv, prefix every command with `uv run`, e.g.
+> `uv run tg-history-importer load ...`. (Activate instead with
+> `.venv\Scripts\activate` on Windows, `source .venv/bin/activate` on Unix.)
+
 **SQLite** (a single local file, zero setup):
 
 ```bash
@@ -97,16 +104,20 @@ tg-history-importer init-db --to sqlite --db ./chat.db
 
 ## Schema
 
-`messages`: `id, chat_id, chat_name, message_id, message_type, action, user_id,
-user_name, from_id_raw, message, date, date_unixtime, edited,
+`messages`: `id, chat_id, chat_name, chat_type, message_id, message_type,
+action, user_id, user_name, from_id_raw, message, date, date_unixtime, edited,
 reply_to_message_id, reply_to_text, forwarded_from, media_type, mime_type,
 file_path, file_name, file_size, thumbnail, duration_seconds, width, height,
 import_id` — unique on `(chat_id, message_id)`.
 
 `import_logs`: `id, loaded_at, export_date, actor, hostname, source_path,
-db_target, export_chat_id, export_chat_name, export_file_name, export_file_size,
-export_max_date_unixtime, prepared_rows, inserted_rows, skipped_by_id,
-service_rows, errors_count, errors_preview`.
+db_target, export_chat_id, export_chat_name, export_chat_type, export_file_name,
+export_file_size, export_max_date_unixtime, prepared_rows, inserted_rows,
+skipped_by_id, service_rows, errors_count, errors_preview`.
+
+`chat_type` mirrors the export's top-level type — `personal_chat` (a 1:1
+dialog), `bot_chat`, `private_group`, `public_supergroup`, `private_channel`,
+etc. Filter dialogs with `WHERE chat_type = 'personal_chat'`.
 
 ## Development
 
@@ -139,26 +150,32 @@ A read-only mirror is kept on
 
 ## Roadmap
 
-- **0.2.0** — copy media into a managed local store (`--copy-media`), content-
-  addressed by hash, cross-platform default location.
-- **0.x** — HTML export support; MySQL / SQL Server targets; streaming parser
-  for very large exports; optional S3/object-storage backend.
-- **Cross-platform** — verified Linux & macOS support (paths, media store,
-  tested installs). Prerequisite for the GUI below.
-- **Query/export layer** — CLI command to pull messages by user
-  (`user_id` / `user_name`) or by chat, with **date-range**, **sorting** and
-  **filters**, written out to a file (CSV/JSON). Includes `chat_name` +
-  `chat_id` per row. This is the backend the GUI builds on.
-- **GUI (after cross-platform)** — desktop app that:
-  - picks an export file from disk and imports it (wraps `load`);
-  - searches / compiles messages by user or chat, with date filter, sorting
-    and column filters;
-  - exports the result of a user/chat query to a file.
-- **1.0.0** — when the feature set is complete and stable.
+### ✅ v0.1.0 — first release
+- [x] CLI (`load` / `init-db`)
+- [x] JSON export → PostgreSQL & SQLite
+- [x] `messages` + `import_logs`, dedup, service events, media metadata
+
+### 🚧 v0.2.0 — media store
+- [ ] `--copy-media`: copy files into a managed store
+- [ ] content-addressed by hash (dedup identical media)
+- [ ] cross-platform default location (`platformdirs`)
+
+### 🗺️ Later
+- [ ] HTML export support
+- [ ] MySQL / SQL Server targets
+- [ ] streaming parser for very large exports
+- [ ] optional S3 / object-storage backend
+- [ ] verified Linux & macOS support
+- [ ] query/export layer — pull messages by user (`user_id` / `user_name`) or
+      chat, with date-range, sorting and filters, written to a file (backend
+      for the GUI)
+- [ ] GUI — import an export file, search/compile by user or chat, export results
+
+### 🏁 v1.0.0 — stable
+- [ ] feature-complete & stable
 
 **Order:** media store (0.2.0) → HTML / more DBs → cross-platform →
-query/export layer → GUI. The media store lands **before** the query/export
-backend and the GUI.
+query/export layer → GUI.
 
 ## Versioning
 

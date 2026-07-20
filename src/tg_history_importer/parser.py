@@ -97,6 +97,7 @@ def _to_int_or_none(value: Any) -> int | None:
 class ParseResult:
     chat_id: int
     chat_name: str
+    chat_type: str | None  # export top-level "type": personal_chat, public_supergroup, ...
     rows: list[dict]
     total_messages: int  # length of the raw "messages" array
     service_rows: int  # how many of `rows` are service events
@@ -162,6 +163,9 @@ def parse_export(
         raise ValueError(f"Export 'id' must be an int, got: {chat_id_raw!r}")
     chat_id = normalize_chat_id(chat_id_raw)
     chat_name = data.get("name") or ""
+    # Export top-level "type": personal_chat (1:1 dialog), bot_chat,
+    # private_group, public_supergroup, private_channel, public_channel, ...
+    chat_type = data.get("type")
 
     messages = data.get("messages", [])
     if not isinstance(messages, list):
@@ -221,6 +225,7 @@ def parse_export(
             {
                 "chat_id": chat_id,
                 "chat_name": chat_name,
+                "chat_type": chat_type,
                 "message_id": mid,
                 "message_type": mtype,
                 "action": action,
@@ -249,6 +254,7 @@ def parse_export(
     return ParseResult(
         chat_id=chat_id,
         chat_name=str(chat_name),
+        chat_type=chat_type,
         rows=rows,
         total_messages=len(messages),
         service_rows=service_rows,
