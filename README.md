@@ -80,6 +80,16 @@ tg-history-importer init-db --to sqlite --db ./chat.db
 | `--dsn` | postgres | connection string (or `TG_IMPORTER_DSN` env) |
 | `--export-date` | load | `YYYY-MM-DD`; override date detection |
 | `--batch-size` | load | insert batch size (default 1000) |
+| `--copy-media` | load | copy media files into a managed store |
+| `--media-dir` | load | store location (or `TG_IMPORTER_MEDIA_DIR` env) |
+| `--verbose` / `-v` | load | print per-batch insert progress |
+
+Copy media into a managed store while importing:
+
+```bash
+tg-history-importer load ./ChatExport_2026-07-18 --to sqlite --db ./chat.db \
+  --copy-media --media-dir ./media_store
+```
 
 ## How it works
 
@@ -95,9 +105,33 @@ tg-history-importer init-db --to sqlite --db ./chat.db
 - **Service events** (`type: "service"`) are stored too, with `message_type =
   'service'` and the event name in `action`. Filter them out any time with
   `WHERE message_type = 'message'`.
-- **Media** in v1 is **metadata-only**: the relative path, name, size, MIME,
-  type, dimensions and duration are stored; the files themselves are left in the
-  export folder. Copying media into a managed store is planned (see Roadmap).
+- **Media metadata** is always stored: the relative path, name, size, MIME,
+  type, dimensions and duration; the files themselves stay in the export folder.
+- **Media files** are copied only with **`--copy-media`**. Each file (and its
+  thumbnail) is copied into a store addressed by **sha256**
+  (`<store>/ab/<sha256>.<ext>` — at most 256 shard folders), so identical files
+  (repeated stickers/gifs)
+  are stored once. The row then also carries `media_sha256`, `stored_path` and
+  `stored_thumbnail_path`. Store location: `--media-dir` /
+  `TG_IMPORTER_MEDIA_DIR`, else the OS per-user data dir (`platformdirs`:
+  `%LOCALAPPDATA%` on Windows, `~/Library/Application Support` on macOS,
+  `~/.local/share` on Linux). Files referenced but not present on disk are
+  counted as *missing* and skipped.
+- **What the store is for right now.** It is a **backend/archive**, not a
+  browse-by-hand folder: files are named by hash and spread across shard folders,
+  so the only link from a message to its file lives in the database. Its current
+  value is exactly the three things above — **durability** (media survives
+  deleting the export folder), **deduplication**, and a **precise DB→file link**
+  a program can resolve. Human-friendly retrieval (pull a chat's media into a
+  readable folder) is a planned *media management* step — see the Roadmap.
+- **Media is copied only for newly-inserted messages** (the same dedup as above).
+  Consequences of re-running `--copy-media`:
+  - *Media folder deleted, DB kept* → media is **not** restored: every message is
+    a duplicate, so nothing is re-inserted and nothing is re-copied. To rebuild
+    the store, recreate the rows too (drop the DB / re-import the chat).
+  - *DB deleted, media folder kept* → works fine: rows are re-inserted and each
+    already-present file is reused via hash (counted as *deduplicated*), with
+    `stored_path` set correctly. No duplication on disk.
 - **Export date vs load date** are stored separately (`import_logs.export_date`
   vs `loaded_at`) — they legitimately differ. Export date is detected from the
   `ChatExport_YYYY-MM-DD` folder name, else `--export-date`, else file mtime.
@@ -108,12 +142,15 @@ tg-history-importer init-db --to sqlite --db ./chat.db
 action, user_id, user_name, from_id_raw, message, date, date_unixtime, edited,
 reply_to_message_id, reply_to_text, forwarded_from, media_type, mime_type,
 file_path, file_name, file_size, thumbnail, duration_seconds, width, height,
-import_id` — unique on `(chat_id, message_id)`.
+media_sha256, stored_path, stored_thumbnail_path, import_id` — unique on
+`(chat_id, message_id)`. The `media_sha256` / `stored_*` columns are filled only
+when importing with `--copy-media`.
 
 `import_logs`: `id, loaded_at, export_date, actor, hostname, source_path,
 db_target, export_chat_id, export_chat_name, export_chat_type, export_file_name,
 export_file_size, export_max_date_unixtime, prepared_rows, inserted_rows,
-skipped_by_id, service_rows, errors_count, errors_preview`.
+skipped_by_id, service_rows, media_copied, media_deduplicated, media_missing,
+errors_count, errors_preview`.
 
 `chat_type` mirrors the export's top-level type — `personal_chat` (a 1:1
 dialog), `bot_chat`, `private_group`, `public_supergroup`, `private_channel`,
@@ -160,7 +197,15 @@ A read-only mirror is kept on
 - [ ] content-addressed by hash (dedup identical media)
 - [ ] cross-platform default location (`platformdirs`)
 
+### 📦 Next — standalone binary
+- [ ] package the CLI as a single executable (PyInstaller / Nuitka) so a
+      **non-programmer can run it and get the console** without installing Python
+- [ ] per-OS builds (Windows / Linux / macOS) attached to GitHub Releases
+
 ### 🗺️ Later
+- [ ] **Media management** — export a chat's/user's media into a readable folder
+      by filters (chat / user / date), with original file names; and other media
+      ops. Turns the content-addressed store into something usable by hand.
 - [ ] HTML export support
 - [ ] MySQL / SQL Server targets
 - [ ] streaming parser for very large exports
@@ -174,8 +219,8 @@ A read-only mirror is kept on
 ### 🏁 v1.0.0 — stable
 - [ ] feature-complete & stable
 
-**Order:** media store (0.2.0) → HTML / more DBs → cross-platform →
-query/export layer → GUI.
+**Order:** media store (0.2.0) → standalone binary → media management /
+HTML / more DBs → cross-platform → query/export layer → GUI.
 
 ## Versioning
 

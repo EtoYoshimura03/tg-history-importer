@@ -20,8 +20,11 @@ and `import_logs`.
   single source of truth for the schema.
 - `src/tg_history_importer/db.py` — engine construction, `init_db`, dedup query,
   batched inserts. Dialect-agnostic on purpose.
+- `src/tg_history_importer/media.py` — managed media store (`--copy-media`):
+  sha256 content-addressing, dedup, copy. **All media filesystem I/O lives
+  here**, not in `parser.py`.
 - `src/tg_history_importer/cli.py` — Typer commands `load` / `init-db` /
-  `version`. Wires parser + db together.
+  `version`. Wires parser + media + db together.
 - `tests/` — pytest; `tests/fixtures/sample_result.json` is the canonical tiny
   export used by tests.
 
@@ -44,12 +47,18 @@ and `import_logs`.
   without a reason.
 - **Time comes from `date_unixtime` (UTC).** Never trust the human `date` field
   for storage — it is the exporter's local time.
-- **Media is metadata-only in v1.** Do not add file-copying to v1 code paths;
-  that is a 0.2.0 feature (`--copy-media`, hash-addressed store, cross-platform
-  path via `platformdirs`).
+- **Media metadata is always stored; files are copied only with `--copy-media`**
+  (see `media.py`: sha256 content-addressing, dedup, thumbnails). Default store
+  location is `platformdirs` user data dir; overridable via `--media-dir` /
+  `TG_IMPORTER_MEDIA_DIR`. Handle permission errors with a clear message.
 - **Both message and service rows are stored** (`message_type` + `action`).
   Don't drop service events.
 - **Keep parser side-effect-free** so it stays unit-testable without a database.
+  Media file I/O belongs in `media.py`, invoked from `cli.py` — never in
+  `parser.py`.
+- **Keep insert-row keys uniform.** Every row dict from `parser.py` must carry
+  the same keys (the batched `insert(messages)` compiles from the first row).
+  New nullable columns get a `None` default in the parser's row dict.
 
 ## Conventions
 

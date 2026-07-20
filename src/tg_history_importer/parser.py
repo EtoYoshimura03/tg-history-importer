@@ -248,6 +248,12 @@ def parse_export(
                 "duration_seconds": _to_int_or_none(msg.get("duration_seconds")),
                 "width": _to_int_or_none(msg.get("width")),
                 "height": _to_int_or_none(msg.get("height")),
+                # Managed media store fields — filled later by media.py only when
+                # --copy-media is used; kept here (as None) so every row shares
+                # the same keys for the batched INSERT.
+                "media_sha256": None,
+                "stored_path": None,
+                "stored_thumbnail_path": None,
             }
         )
 

@@ -63,6 +63,10 @@ import_logs = Table(
     Column("inserted_rows", Integer, nullable=True),
     Column("skipped_by_id", Integer, nullable=True),
     Column("service_rows", Integer, nullable=True),
+    # Media store counters (NULL when the run did not use --copy-media).
+    Column("media_copied", Integer, nullable=True),
+    Column("media_deduplicated", Integer, nullable=True),
+    Column("media_missing", Integer, nullable=True),
     Column("errors_count", Integer, nullable=True),
     Column("errors_preview", Text, nullable=True),
 )
@@ -105,6 +109,13 @@ messages = Table(
     Column("duration_seconds", Integer, nullable=True),
     Column("width", Integer, nullable=True),
     Column("height", Integer, nullable=True),
+    # --- Managed media store (v0.2.0, filled only with --copy-media) ---
+    # sha256 of the main media file; NULL if not copied / no media.
+    Column("media_sha256", String(64), nullable=True),
+    # Path of the copied main file, relative to the media store root.
+    Column("stored_path", Text, nullable=True),
+    # Path of the copied thumbnail, relative to the media store root.
+    Column("stored_thumbnail_path", Text, nullable=True),
     # Which import run brought this row in.
     Column("import_id", Integer, ForeignKey("import_logs.id"), nullable=True),
     UniqueConstraint("chat_id", "message_id", name="uq_messages_chat_message"),
