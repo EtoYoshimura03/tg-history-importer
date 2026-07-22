@@ -91,6 +91,31 @@ tg-history-importer load ./ChatExport_2026-07-18 --to sqlite --db ./chat.db \
   --copy-media --media-dir ./media_store
 ```
 
+### Environment variables
+
+Two options can be supplied via the environment so you don't repeat them on
+every call. Set them **once** and the flags become unnecessary (a flag, if
+passed, overrides the variable):
+
+| Variable | Replaces | Purpose |
+|---|---|---|
+| `TG_IMPORTER_DSN` | `--dsn` | PostgreSQL connection string |
+| `TG_IMPORTER_MEDIA_DIR` | `--media-dir` | media store location |
+
+```bash
+# Linux / macOS (current shell)
+export TG_IMPORTER_DSN="postgresql://user:pass@host/db?sslmode=require"
+
+# Windows PowerShell (current session)
+$env:TG_IMPORTER_DSN = "postgresql://user:pass@host/db?sslmode=require"
+
+# Windows PowerShell (persistent, new terminals) — note: stored in the user
+# environment, so the password is saved in plain text
+setx TG_IMPORTER_DSN "postgresql://user:pass@host/db?sslmode=require"
+```
+
+After that, `tg-history-importer load ... --to postgres` needs no `--dsn`.
+
 ## How it works
 
 - **Time** is taken from `date_unixtime` (reliable UTC). The human `date` field
