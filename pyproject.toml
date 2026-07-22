@@ -30,6 +30,7 @@ classifiers = [
 dependencies = [
     "SQLAlchemy>=2.0,<3.0",
     "typer>=0.9",
+    "platformdirs>=4.0",
 ]
 
 [project.optional-dependencies]

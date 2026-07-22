@@ -52,6 +52,8 @@ import_logs = Table(
     # Chat the export belongs to (normalized id, without the -100 prefix).
     Column("export_chat_id", BigInteger, nullable=True),
     Column("export_chat_name", String(1024), nullable=True),
+    # Export type: personal_chat (1:1 dialog), public_supergroup, channel, ...
+    Column("export_chat_type", String(32), nullable=True),
     Column("export_file_name", String(1024), nullable=True),
     Column("export_file_size", BigInteger, nullable=True),
     # Unixtime of the latest message in the export (how far history was pulled).
@@ -61,6 +63,10 @@ import_logs = Table(
     Column("inserted_rows", Integer, nullable=True),
     Column("skipped_by_id", Integer, nullable=True),
     Column("service_rows", Integer, nullable=True),
+    # Media store counters (NULL when the run did not use --copy-media).
+    Column("media_copied", Integer, nullable=True),
+    Column("media_deduplicated", Integer, nullable=True),
+    Column("media_missing", Integer, nullable=True),
     Column("errors_count", Integer, nullable=True),
     Column("errors_preview", Text, nullable=True),
 )
@@ -71,6 +77,10 @@ messages = Table(
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("chat_id", BigInteger, nullable=False),
     Column("chat_name", String(1024), nullable=True),
+    # Chat kind from the export: personal_chat (1:1 dialog), public_supergroup,
+    # private_group, channel, bot_chat, ... Filter dialogs with
+    # WHERE chat_type = 'personal_chat'.
+    Column("chat_type", String(32), nullable=True),
     Column("message_id", BigInteger, nullable=False),
     # "message" (regular) or "service" (join/leave/pin/call/...).
     Column("message_type", String(32), nullable=False),
@@ -99,6 +109,13 @@ messages = Table(
     Column("duration_seconds", Integer, nullable=True),
     Column("width", Integer, nullable=True),
     Column("height", Integer, nullable=True),
+    # --- Managed media store (v0.2.0, filled only with --copy-media) ---
+    # sha256 of the main media file; NULL if not copied / no media.
+    Column("media_sha256", String(64), nullable=True),
+    # Path of the copied main file, relative to the media store root.
+    Column("stored_path", Text, nullable=True),
+    # Path of the copied thumbnail, relative to the media store root.
+    Column("stored_thumbnail_path", Text, nullable=True),
     # Which import run brought this row in.
     Column("import_id", Integer, ForeignKey("import_logs.id"), nullable=True),
     UniqueConstraint("chat_id", "message_id", name="uq_messages_chat_message"),

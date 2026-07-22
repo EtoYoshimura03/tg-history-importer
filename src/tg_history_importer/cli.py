@@ -21,6 +21,7 @@ import typer
 
 from . import __version__
 from . import db as dbmod
+from . import media as mediamod
 from .parser import parse_export, resolve_export_path
 
 app = typer.Typer(
@@ -73,6 +74,15 @@ def load_cmd(
         help="YYYY-MM-DD; overrides folder-name / mtime detection.",
     ),
     batch_size: int = typer.Option(1000, "--batch-size", help="Insert batch size."),
+    copy_media: bool = typer.Option(
+        False, "--copy-media", help="Copy media files into a managed store."
+    ),
+    media_dir: Optional[str] = typer.Option(
+        None,
+        "--media-dir",
+        envvar="TG_IMPORTER_MEDIA_DIR",
+        help="Media store location (default: OS per-user data dir).",
+    ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Print per-batch insert progress."
     ),
@@ -93,6 +103,22 @@ def load_cmd(
     file_path = Path(json_path)
     file_size = file_path.stat().st_size if file_path.exists() else None
 
+    # Copy media into the managed store (before insert, so rows carry the
+    # stored paths). Only the rows actually being inserted are processed.
+    media_stats = None
+    store_dir = None
+    if copy_media:
+        store_dir = mediamod.resolve_store_dir(media_dir)
+        try:
+            mediamod.ensure_store(store_dir)
+        except RuntimeError as e:
+            typer.secho(f"Error: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=2)
+        typer.echo(f"Copying media into {store_dir} ...")
+        media_stats = mediamod.copy_media_for_rows(
+            to_insert, file_path.parent, store_dir
+        )
+
     # Insert the log row first so messages can reference it (FK import_id);
     # counters are filled in now and inserted_rows/errors are updated after.
     log_id = dbmod.insert_import_log(
@@ -105,6 +131,7 @@ def load_cmd(
         db_target=to,
         export_chat_id=parsed.chat_id,
         export_chat_name=parsed.chat_name,
+        export_chat_type=parsed.chat_type,
         export_file_name=file_path.name,
         export_file_size=file_size,
         export_max_date_unixtime=parsed.max_date_unixtime,
@@ -112,6 +139,9 @@ def load_cmd(
         inserted_rows=0,
         skipped_by_id=skipped_by_id,
         service_rows=service_new,
+        media_copied=media_stats.copied if media_stats else None,
+        media_deduplicated=media_stats.deduplicated if media_stats else None,
+        media_missing=media_stats.missing if media_stats else None,
         errors_count=0,
         errors_preview=None,
     )
@@ -154,6 +184,13 @@ def load_cmd(
     typer.echo(f"  Inserted rows:      {inserted} (in {n_batches} batch(es) of {batch_size})")
     typer.echo(f"    of which service: {service_new}")
     typer.echo(f"  Skipped duplicates: {skipped_by_id}")
+    if media_stats is not None:
+        typer.echo(f"  Media store:        {store_dir}")
+        typer.echo(f"  Media copied:       {media_stats.copied}")
+        typer.echo(f"  Media deduplicated: {media_stats.deduplicated}")
+        typer.echo(f"  Media missing:      {media_stats.missing}")
+        if media_stats.errors:
+            typer.echo(f"  Media errors:       {media_stats.errors}")
     typer.echo(f"  Export date:        {parsed.export_date}")
     typer.echo(f"  Import log id:      {log_id}")
     typer.echo(f"  Errors:             {errors_count}")

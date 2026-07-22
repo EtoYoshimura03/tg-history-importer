@@ -7,8 +7,21 @@ Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Managed media store** (`--copy-media`): copies each media file and its
+  thumbnail into a content-addressed store (sha256, sharded), deduplicating
+  identical files. Location via `--media-dir` / `TG_IMPORTER_MEDIA_DIR`, else the
+  OS per-user data dir (`platformdirs`). New columns: `messages.media_sha256`,
+  `stored_path`, `stored_thumbnail_path`; `import_logs.media_copied`,
+  `media_deduplicated`, `media_missing`. Missing files are counted and skipped.
 - `load` now reports batch count (`in N batch(es) of M`) and accepts
   `--verbose`/`-v` for per-batch insert progress.
+- Chat type captured from the export: `messages.chat_type` and
+  `import_logs.export_chat_type` (e.g. `personal_chat` for a 1:1 dialog vs
+  `public_supergroup`). Filter dialogs with `WHERE chat_type = 'personal_chat'`.
+
+### Docs
+- README: note that the `tg-history-importer` command needs an activated venv
+  or `uv run` prefix; checklist-style Roadmap.
 
 ## [0.1.0] - unreleased
 

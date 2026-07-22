@@ -41,6 +41,13 @@ format **JSON (machine-readable)** → export. You get a folder like
 
 ## Usage
 
+> The examples use the bare `tg-history-importer` command, which is available
+> once the package is installed **on your PATH** — inside an activated
+> virtualenv, or via a global install (`pipx install .`). If you use **uv**
+> without activating the venv, prefix every command with `uv run`, e.g.
+> `uv run tg-history-importer load ...`. (Activate instead with
+> `.venv\Scripts\activate` on Windows, `source .venv/bin/activate` on Unix.)
+
 **SQLite** (a single local file, zero setup):
 
 ```bash
@@ -73,6 +80,41 @@ tg-history-importer init-db --to sqlite --db ./chat.db
 | `--dsn` | postgres | connection string (or `TG_IMPORTER_DSN` env) |
 | `--export-date` | load | `YYYY-MM-DD`; override date detection |
 | `--batch-size` | load | insert batch size (default 1000) |
+| `--copy-media` | load | copy media files into a managed store |
+| `--media-dir` | load | store location (or `TG_IMPORTER_MEDIA_DIR` env) |
+| `--verbose` / `-v` | load | print per-batch insert progress |
+
+Copy media into a managed store while importing:
+
+```bash
+tg-history-importer load ./ChatExport_2026-07-18 --to sqlite --db ./chat.db \
+  --copy-media --media-dir ./media_store
+```
+
+### Environment variables
+
+Two options can be supplied via the environment so you don't repeat them on
+every call. Set them **once** and the flags become unnecessary (a flag, if
+passed, overrides the variable):
+
+| Variable | Replaces | Purpose |
+|---|---|---|
+| `TG_IMPORTER_DSN` | `--dsn` | PostgreSQL connection string |
+| `TG_IMPORTER_MEDIA_DIR` | `--media-dir` | media store location |
+
+```bash
+# Linux / macOS (current shell)
+export TG_IMPORTER_DSN="postgresql://user:pass@host/db?sslmode=require"
+
+# Windows PowerShell (current session)
+$env:TG_IMPORTER_DSN = "postgresql://user:pass@host/db?sslmode=require"
+
+# Windows PowerShell (persistent, new terminals) — note: stored in the user
+# environment, so the password is saved in plain text
+setx TG_IMPORTER_DSN "postgresql://user:pass@host/db?sslmode=require"
+```
+
+After that, `tg-history-importer load ... --to postgres` needs no `--dsn`.
 
 ## How it works
 
@@ -88,25 +130,56 @@ tg-history-importer init-db --to sqlite --db ./chat.db
 - **Service events** (`type: "service"`) are stored too, with `message_type =
   'service'` and the event name in `action`. Filter them out any time with
   `WHERE message_type = 'message'`.
-- **Media** in v1 is **metadata-only**: the relative path, name, size, MIME,
-  type, dimensions and duration are stored; the files themselves are left in the
-  export folder. Copying media into a managed store is planned (see Roadmap).
+- **Media metadata** is always stored: the relative path, name, size, MIME,
+  type, dimensions and duration; the files themselves stay in the export folder.
+- **Media files** are copied only with **`--copy-media`**. Each file (and its
+  thumbnail) is copied into a store addressed by **sha256**
+  (`<store>/ab/<sha256>.<ext>` — at most 256 shard folders), so identical files
+  (repeated stickers/gifs)
+  are stored once. The row then also carries `media_sha256`, `stored_path` and
+  `stored_thumbnail_path`. Store location: `--media-dir` /
+  `TG_IMPORTER_MEDIA_DIR`, else the OS per-user data dir (`platformdirs`:
+  `%LOCALAPPDATA%` on Windows, `~/Library/Application Support` on macOS,
+  `~/.local/share` on Linux). Files referenced but not present on disk are
+  counted as *missing* and skipped.
+- **What the store is for right now.** It is a **backend/archive**, not a
+  browse-by-hand folder: files are named by hash and spread across shard folders,
+  so the only link from a message to its file lives in the database. Its current
+  value is exactly the three things above — **durability** (media survives
+  deleting the export folder), **deduplication**, and a **precise DB→file link**
+  a program can resolve. Human-friendly retrieval (pull a chat's media into a
+  readable folder) is a planned *media management* step — see the Roadmap.
+- **Media is copied only for newly-inserted messages** (the same dedup as above).
+  Consequences of re-running `--copy-media`:
+  - *Media folder deleted, DB kept* → media is **not** restored: every message is
+    a duplicate, so nothing is re-inserted and nothing is re-copied. To rebuild
+    the store, recreate the rows too (drop the DB / re-import the chat).
+  - *DB deleted, media folder kept* → works fine: rows are re-inserted and each
+    already-present file is reused via hash (counted as *deduplicated*), with
+    `stored_path` set correctly. No duplication on disk.
 - **Export date vs load date** are stored separately (`import_logs.export_date`
   vs `loaded_at`) — they legitimately differ. Export date is detected from the
   `ChatExport_YYYY-MM-DD` folder name, else `--export-date`, else file mtime.
 
 ## Schema
 
-`messages`: `id, chat_id, chat_name, message_id, message_type, action, user_id,
-user_name, from_id_raw, message, date, date_unixtime, edited,
+`messages`: `id, chat_id, chat_name, chat_type, message_id, message_type,
+action, user_id, user_name, from_id_raw, message, date, date_unixtime, edited,
 reply_to_message_id, reply_to_text, forwarded_from, media_type, mime_type,
 file_path, file_name, file_size, thumbnail, duration_seconds, width, height,
-import_id` — unique on `(chat_id, message_id)`.
+media_sha256, stored_path, stored_thumbnail_path, import_id` — unique on
+`(chat_id, message_id)`. The `media_sha256` / `stored_*` columns are filled only
+when importing with `--copy-media`.
 
 `import_logs`: `id, loaded_at, export_date, actor, hostname, source_path,
-db_target, export_chat_id, export_chat_name, export_file_name, export_file_size,
-export_max_date_unixtime, prepared_rows, inserted_rows, skipped_by_id,
-service_rows, errors_count, errors_preview`.
+db_target, export_chat_id, export_chat_name, export_chat_type, export_file_name,
+export_file_size, export_max_date_unixtime, prepared_rows, inserted_rows,
+skipped_by_id, service_rows, media_copied, media_deduplicated, media_missing,
+errors_count, errors_preview`.
+
+`chat_type` mirrors the export's top-level type — `personal_chat` (a 1:1
+dialog), `bot_chat`, `private_group`, `public_supergroup`, `private_channel`,
+etc. Filter dialogs with `WHERE chat_type = 'personal_chat'`.
 
 ## Development
 
@@ -139,26 +212,40 @@ A read-only mirror is kept on
 
 ## Roadmap
 
-- **0.2.0** — copy media into a managed local store (`--copy-media`), content-
-  addressed by hash, cross-platform default location.
-- **0.x** — HTML export support; MySQL / SQL Server targets; streaming parser
-  for very large exports; optional S3/object-storage backend.
-- **Cross-platform** — verified Linux & macOS support (paths, media store,
-  tested installs). Prerequisite for the GUI below.
-- **Query/export layer** — CLI command to pull messages by user
-  (`user_id` / `user_name`) or by chat, with **date-range**, **sorting** and
-  **filters**, written out to a file (CSV/JSON). Includes `chat_name` +
-  `chat_id` per row. This is the backend the GUI builds on.
-- **GUI (after cross-platform)** — desktop app that:
-  - picks an export file from disk and imports it (wraps `load`);
-  - searches / compiles messages by user or chat, with date filter, sorting
-    and column filters;
-  - exports the result of a user/chat query to a file.
-- **1.0.0** — when the feature set is complete and stable.
+### ✅ v0.1.0 — first release
+- [x] CLI (`load` / `init-db`)
+- [x] JSON export → PostgreSQL & SQLite
+- [x] `messages` + `import_logs`, dedup, service events, media metadata
 
-**Order:** media store (0.2.0) → HTML / more DBs → cross-platform →
-query/export layer → GUI. The media store lands **before** the query/export
-backend and the GUI.
+### 🚧 v0.2.0 — media store
+- [ ] `--copy-media`: copy files into a managed store
+- [ ] content-addressed by hash (dedup identical media)
+- [ ] cross-platform default location (`platformdirs`)
+
+### 📦 Next — standalone binary
+- [ ] package the CLI as a single executable (PyInstaller / Nuitka) so a
+      **non-programmer can run it and get the console** without installing Python
+- [ ] per-OS builds (Windows / Linux / macOS) attached to GitHub Releases
+
+### 🗺️ Later
+- [ ] **Media management** — export a chat's/user's media into a readable folder
+      by filters (chat / user / date), with original file names; and other media
+      ops. Turns the content-addressed store into something usable by hand.
+- [ ] HTML export support
+- [ ] MySQL / SQL Server targets
+- [ ] streaming parser for very large exports
+- [ ] optional S3 / object-storage backend
+- [ ] verified Linux & macOS support
+- [ ] query/export layer — pull messages by user (`user_id` / `user_name`) or
+      chat, with date-range, sorting and filters, written to a file (backend
+      for the GUI)
+- [ ] GUI — import an export file, search/compile by user or chat, export results
+
+### 🏁 v1.0.0 — stable
+- [ ] feature-complete & stable
+
+**Order:** media store (0.2.0) → standalone binary → media management /
+HTML / more DBs → cross-platform → query/export layer → GUI.
 
 ## Versioning
 
