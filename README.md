@@ -71,6 +71,17 @@ Create the tables without importing:
 tg-history-importer init-db --to sqlite --db ./chat.db
 ```
 
+### Interactive mode
+
+Run the app **with no command** (or double-click the binary) and it opens a
+guided menu — choose an action with the **arrow keys** and answer the prompts
+(path, target database, copy media, …), no flags to remember. Full line editing
+works: **paste with Ctrl+V or right-click**, and paths can be pasted **with or
+without quotes** (Windows "Copy as path" wraps them in quotes — that works too).
+This is the friendly way in for non-technical users; the console stays open
+until you choose *Exit*. Passing a subcommand (`load`, `init-db`, …) skips the menu and
+runs directly, so scripts and CI are unaffected.
+
 ### Options
 
 | Option | Applies to | Meaning |
@@ -210,6 +221,49 @@ branches via PR. Releases are **git tags** following **SemVer** (`v0.1.0`).
 A read-only mirror is kept on
 [Codeberg](https://codeberg.org/EtoOwl/tg-history-importer).
 
+## Standalone binary
+
+The binary exists for people **without Python**: they download one file,
+double-click it, and land in the interactive menu. If you already have Python,
+don't bother with the binary — installing the package is lighter and the command
+is more convenient than invoking an `.exe` from a console:
+
+```bash
+pipx install .        # or: uv tool install .
+tg-history-importer load ...
+# or without installing a command: python -m tg_history_importer load ...
+```
+
+A single executable that runs **without a Python install** is produced with
+[PyInstaller](https://pyinstaller.org). Build it locally.
+
+With **uv** (recommended):
+
+```bash
+uv pip install -e ".[postgres,build]"
+uv run pyinstaller --onefile --name tg-history-importer --paths src src/tg_history_importer/__main__.py
+# result: dist/tg-history-importer (dist/tg-history-importer.exe on Windows)
+```
+
+Or with plain **pip** (inside an activated venv):
+
+```bash
+pip install ".[postgres,build]"
+pyinstaller --onefile --name tg-history-importer --paths src src/tg_history_importer/__main__.py
+```
+
+Releases are built automatically: pushing a `v*` tag triggers
+`.github/workflows/release.yml`, which builds the binary on Windows, Linux and
+macOS in parallel and attaches all three to the GitHub Release for that tag.
+You can also run that workflow manually from the **Actions** tab (build-only —
+the release step is skipped without a tag).
+
+Notes:
+- PyInstaller cannot cross-compile — each OS binary is built on its own runner.
+- The binary bundles the Python interpreter and all dependencies, so it is tens
+  of MB. That size is the price of needing no Python on the target machine.
+- The macOS and Windows binaries are unsigned; the OS may warn on first run.
+
 ## Roadmap
 
 ### ✅ v0.1.0 — first release
@@ -217,10 +271,10 @@ A read-only mirror is kept on
 - [x] JSON export → PostgreSQL & SQLite
 - [x] `messages` + `import_logs`, dedup, service events, media metadata
 
-### 🚧 v0.2.0 — media store
-- [ ] `--copy-media`: copy files into a managed store
-- [ ] content-addressed by hash (dedup identical media)
-- [ ] cross-platform default location (`platformdirs`)
+### ✅ v0.2.0 — media store
+- [x] `--copy-media`: copy files into a managed store
+- [x] content-addressed by hash (dedup identical media)
+- [x] cross-platform default location (`platformdirs`)
 
 ### 📦 Next — standalone binary
 - [ ] package the CLI as a single executable (PyInstaller / Nuitka) so a

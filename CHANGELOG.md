@@ -7,6 +7,22 @@ Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Path inputs (export path, SQLite `--db`, `--media-dir`) now tolerate
+  surrounding quotes, so Windows "Copy as path" values work as-is in both the
+  CLI and the interactive menu.
+- `load` and `init-db` now print the **absolute SQLite file path** they use, so
+  it's clear where a relative `--db` (e.g. the default `chat.db`) is created.
+  The file, its parent folders and tables are all created automatically.
+- **Interactive mode**: running with no command (e.g. a double-clicked binary)
+  opens a guided menu (import / init-db / version) that prompts for inputs and
+  keeps the console open. Passing a subcommand still runs directly. Load/init-db
+  logic factored into `perform_load` / `perform_init_db`, shared by CLI + wizard.
+  Built on `questionary` (new dependency): arrow-key menus, path completion and
+  working paste (Ctrl+V / right-click) in any Windows console host.
+- **Standalone binary**: `python -m tg_history_importer` entry point plus a
+  PyInstaller build and a `.github/workflows/release.yml` that builds Windows /
+  Linux / macOS executables on each `v*` tag and attaches them to the GitHub
+  Release. New optional dependency group `build` (`pip install .[build]`).
 - **Managed media store** (`--copy-media`): copies each media file and its
   thumbnail into a content-addressed store (sha256, sharded), deduplicating
   identical files. Location via `--media-dir` / `TG_IMPORTER_MEDIA_DIR`, else the

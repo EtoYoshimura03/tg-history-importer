@@ -30,6 +30,21 @@ app = typer.Typer(
 )
 
 
+def _unquote(value: Optional[str]) -> Optional[str]:
+    """Strip one pair of matching surrounding quotes and outer whitespace.
+
+    Windows 11 "Copy as path" wraps the path in double quotes; pasting that into
+    an interactive prompt (or as a single quoted CLI arg) would keep the quotes
+    as part of the string. This makes both `"C:\\a b\\x"` and `C:\\a b\\x` work.
+    """
+    if value is None:
+        return None
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+        v = v[1:-1]
+    return v
+
+
 def _build_engine(target: str, dsn: Optional[str], db_path: Optional[str]):
     try:
         return dbmod.build_engine(target, dsn=dsn, db_path=db_path)
@@ -38,10 +53,30 @@ def _build_engine(target: str, dsn: Optional[str], db_path: Optional[str]):
         raise typer.Exit(code=2)
 
 
+@app.callback(invoke_without_command=True)
+def _entry(ctx: typer.Context) -> None:
+    """Import Telegram chat exports. Run with no command for interactive mode."""
+    if ctx.invoked_subcommand is None:
+        # Launched with no subcommand (e.g. a double-clicked binary) -> guide the
+        # user through a menu instead of printing "Missing command" and exiting.
+        from .wizard import run_wizard
+
+        run_wizard()
+
+
 @app.command("version")
 def version_cmd() -> None:
     """Print the version and exit."""
     typer.echo(__version__)
+
+
+def perform_init_db(*, to: str, dsn: Optional[str], db: Optional[str]) -> None:
+    """Create the tables on the target database (shared by CLI and wizard)."""
+    db = _unquote(db)
+    engine = _build_engine(to, dsn, db)
+    dbmod.init_db(engine)
+    where = f" at {Path(db).expanduser().resolve()}" if to.lower() == "sqlite" and db else ""
+    typer.secho(f"Tables ensured on target '{to}'{where}.", fg=typer.colors.GREEN)
 
 
 @app.command("init-db")
@@ -53,41 +88,25 @@ def init_db_cmd(
     db: Optional[str] = typer.Option(None, "--db", help="SQLite file path"),
 ) -> None:
     """Create the messages and import_logs tables if they do not exist."""
-    engine = _build_engine(to, dsn, db)
-    dbmod.init_db(engine)
-    typer.secho(f"Tables ensured on target '{to}'.", fg=typer.colors.GREEN)
+    perform_init_db(to=to, dsn=dsn, db=db)
 
 
-@app.command("load")
-def load_cmd(
-    path: str = typer.Argument(
-        ..., help="Path to the export folder (ChatExport_...) or a result.json file."
-    ),
-    to: str = typer.Option(..., "--to", help="Target database: sqlite | postgres"),
-    dsn: Optional[str] = typer.Option(
-        None, "--dsn", envvar="TG_IMPORTER_DSN", help="PostgreSQL connection string"
-    ),
-    db: Optional[str] = typer.Option(None, "--db", help="SQLite file path"),
-    export_date: Optional[str] = typer.Option(
-        None,
-        "--export-date",
-        help="YYYY-MM-DD; overrides folder-name / mtime detection.",
-    ),
-    batch_size: int = typer.Option(1000, "--batch-size", help="Insert batch size."),
-    copy_media: bool = typer.Option(
-        False, "--copy-media", help="Copy media files into a managed store."
-    ),
-    media_dir: Optional[str] = typer.Option(
-        None,
-        "--media-dir",
-        envvar="TG_IMPORTER_MEDIA_DIR",
-        help="Media store location (default: OS per-user data dir).",
-    ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Print per-batch insert progress."
-    ),
+def perform_load(
+    *,
+    path: str,
+    to: str,
+    dsn: Optional[str],
+    db: Optional[str],
+    export_date: Optional[str] = None,
+    batch_size: int = 1000,
+    copy_media: bool = False,
+    media_dir: Optional[str] = None,
+    verbose: bool = False,
 ) -> None:
-    """Load a Telegram JSON export (dedup by chat_id + message_id)."""
+    """Parse an export and load it (shared by the CLI command and the wizard)."""
+    path = _unquote(path)
+    db = _unquote(db)
+    media_dir = _unquote(media_dir)
     json_path = resolve_export_path(path)
     typer.echo(f"Parsing {json_path} ...")
     parsed = parse_export(json_path, export_date_override=export_date)
@@ -179,6 +198,8 @@ def load_cmd(
     typer.echo("")
     typer.secho("Import finished", fg=typer.colors.GREEN, bold=True)
     typer.echo(f"  Chat:               {parsed.chat_name} (id={parsed.chat_id})")
+    if to.lower() == "sqlite" and db:
+        typer.echo(f"  Database file:      {Path(db).expanduser().resolve()}")
     typer.echo(f"  Messages in export: {parsed.total_messages}")
     typer.echo(f"  Prepared rows:      {len(to_insert)}")
     typer.echo(f"  Inserted rows:      {inserted} (in {n_batches} batch(es) of {batch_size})")
@@ -198,6 +219,49 @@ def load_cmd(
     if errors_count:
         typer.secho(f"Error: {errors_preview}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
+
+
+@app.command("load")
+def load_cmd(
+    path: str = typer.Argument(
+        ..., help="Path to the export folder (ChatExport_...) or a result.json file."
+    ),
+    to: str = typer.Option(..., "--to", help="Target database: sqlite | postgres"),
+    dsn: Optional[str] = typer.Option(
+        None, "--dsn", envvar="TG_IMPORTER_DSN", help="PostgreSQL connection string"
+    ),
+    db: Optional[str] = typer.Option(None, "--db", help="SQLite file path"),
+    export_date: Optional[str] = typer.Option(
+        None,
+        "--export-date",
+        help="YYYY-MM-DD; overrides folder-name / mtime detection.",
+    ),
+    batch_size: int = typer.Option(1000, "--batch-size", help="Insert batch size."),
+    copy_media: bool = typer.Option(
+        False, "--copy-media", help="Copy media files into a managed store."
+    ),
+    media_dir: Optional[str] = typer.Option(
+        None,
+        "--media-dir",
+        envvar="TG_IMPORTER_MEDIA_DIR",
+        help="Media store location (default: OS per-user data dir).",
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Print per-batch insert progress."
+    ),
+) -> None:
+    """Load a Telegram JSON export (dedup by chat_id + message_id)."""
+    perform_load(
+        path=path,
+        to=to,
+        dsn=dsn,
+        db=db,
+        export_date=export_date,
+        batch_size=batch_size,
+        copy_media=copy_media,
+        media_dir=media_dir,
+        verbose=verbose,
+    )
 
 
 if __name__ == "__main__":
