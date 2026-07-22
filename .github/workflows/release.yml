@@ -1,0 +1,82 @@
+name: Release binaries
+
+# Runs when you push a version tag like v0.3.0. Builds a standalone binary on
+# Windows, Linux and macOS with PyInstaller, then attaches all three to a
+# GitHub Release for that tag.
+#
+# Also runnable manually (Actions tab -> "Run workflow"): that only builds the
+# binaries and uploads them as run artifacts; the release step is skipped when
+# there is no tag.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: tg-history-importer-linux
+          - os: windows-latest
+            asset: tg-history-importer-windows.exe
+          - os: macos-latest
+            asset: tg-history-importer-macos
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project + PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[postgres,build]"
+
+      - name: Build binary
+        run: >
+          pyinstaller --onefile --name tg-history-importer
+          --paths src src/tg_history_importer/__main__.py
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p out
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            mv dist/tg-history-importer.exe "out/${{ matrix.asset }}"
+          else
+            mv dist/tg-history-importer "out/${{ matrix.asset }}"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}
+
+  release:
+    name: Publish release
+    needs: build
+    # Only publish a Release for real tag pushes; a manual run just builds.
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required for gh release to create/upload
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${{ github.ref_name }}" artifacts/*/*
+          --repo "${{ github.repository }}"
+          --title "${{ github.ref_name }}"
+          --generate-notes

@@ -24,7 +24,12 @@ and `import_logs`.
   sha256 content-addressing, dedup, copy. **All media filesystem I/O lives
   here**, not in `parser.py`.
 - `src/tg_history_importer/cli.py` — Typer commands `load` / `init-db` /
-  `version`. Wires parser + media + db together.
+  `version`, plus `perform_load` / `perform_init_db` (the actual logic, shared
+  with the wizard) and a no-args callback that launches interactive mode.
+- `src/tg_history_importer/wizard.py` — interactive guided menu (`questionary` /
+  prompt_toolkit: arrow-key menus, paste, path completion) shown when the app
+  runs with no command. Delegates to `perform_*` in `cli.py`.
+- `src/tg_history_importer/__main__.py` — `python -m` / PyInstaller entry.
 - `tests/` — pytest; `tests/fixtures/sample_result.json` is the canonical tiny
   export used by tests.
 
@@ -67,6 +72,10 @@ and `import_logs`.
 - Add/adjust tests in `tests/` for any parser change; keep the fixture minimal.
 - SemVer + Keep-a-Changelog: user-visible changes go in `CHANGELOG.md` under
   `## [Unreleased]`.
+- **Version has one source: `pyproject.toml`.** `__init__.__version__` reads it
+  via `importlib.metadata`. Bump the number only in `pyproject.toml`; the git tag
+  (`vX.Y.Z`) must match it. After bumping, reinstall (`uv pip install -e .`) so
+  the metadata — and the `version` command — reflect the new number.
 - **No copy-paste placeholders in commands.** When giving the maintainer a
   command to run, never use fillers that could be pasted verbatim (`<...>`,
   `...` inside a path, `<paste_here>`). Use the real value when known, or an

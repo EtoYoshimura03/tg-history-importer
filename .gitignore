@@ -26,6 +26,8 @@ __pycache__/
 .eggs/
 build/
 dist/
+# PyInstaller-generated spec (we build with CLI flags, not a checked-in spec)
+*.spec
 .venv/
 venv/
 env/
